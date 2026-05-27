@@ -1,7 +1,8 @@
 ---
 - name: Crear usuario ansible
   hosts: all
-  become: yes
+  become: false
+  gather_facts: no
 
   vars:
     ansible_user_name: ansible

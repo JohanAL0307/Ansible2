@@ -2,6 +2,7 @@
 - name: Verificar servicios críticos
   hosts: all
   become: false
+  gather_facts: no
 
   vars:
     critical_services:
