@@ -1,0 +1,98 @@
+---
+- name: Actualizar sistema operativo Linux
+  hosts: all
+  become: yes
+
+  vars:
+    reboot_timeout: 600
+
+  tasks:
+
+    #################################################################
+    # Debian / Ubuntu
+    #################################################################
+
+    - name: Actualizar cache APT
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Actualizar paquetes Debian
+      apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      register: debian_upgrade
+      when: ansible_os_family == "Debian"
+
+    #################################################################
+    # RedHat / Rocky / AlmaLinux / CentOS
+    #################################################################
+
+    - name: Actualizar paquetes RedHat
+      dnf:
+        name: "*"
+        state: latest
+        update_only: yes
+      register: redhat_upgrade
+      when: ansible_os_family == "RedHat"
+
+    - name: Limpiar paquetes obsoletos RedHat
+      dnf:
+        autoremove: yes
+      when: ansible_os_family == "RedHat"
+
+    #################################################################
+    # Validar necesidad de reinicio
+    #################################################################
+
+    - name: Validar reboot requerido Debian
+      stat:
+        path: /var/run/reboot-required
+      register: reboot_required_debian
+      when: ansible_os_family == "Debian"
+
+    - name: Validar reboot requerido RedHat
+      command: needs-restarting -r
+      register: reboot_required_redhat
+      failed_when: false
+      changed_when: false
+      when: ansible_os_family == "RedHat"
+
+    #################################################################
+    # Reinicio controlado
+    #################################################################
+
+    - name: Reiniciar servidor Debian
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        msg: "Reinicio automático posterior a actualización"
+      when:
+        - ansible_os_family == "Debian"
+        - reboot_required_debian.stat.exists
+
+    - name: Reiniciar servidor RedHat
+      reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        msg: "Reinicio automático posterior a actualización"
+      when:
+        - ansible_os_family == "RedHat"
+        - reboot_required_redhat.rc == 1
+
+    #################################################################
+    # Validaciones finales
+    #################################################################
+
+    - name: Obtener versión del kernel
+      command: uname -r
+      register: kernel_version
+      changed_when: false
+
+    - name: Mostrar versión actual
+      debug:
+        msg: "Kernel actual: {{ kernel_version.stdout }}"
+
+    - name: Mostrar resumen final
+      debug:
+        msg: "Actualización del sistema operativo finalizada correctamente"

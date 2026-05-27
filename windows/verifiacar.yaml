@@ -1,0 +1,95 @@
+---
+- name: Verificar servicios críticos Windows
+  hosts: windows
+  gather_facts: yes
+
+  vars:
+
+    critical_services:
+      - Spooler
+      - W32Time
+      - WinRM
+      - LanmanServer
+
+    auto_remediation: false
+
+  tasks:
+
+    #################################################################
+    # Obtener estado de servicios
+    #################################################################
+
+    - name: Consultar servicios Windows
+      win_service:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ critical_services }}"
+      ignore_errors: yes
+
+    #################################################################
+    # Mostrar estado
+    #################################################################
+
+    - name: Mostrar estado de servicios
+      debug:
+        msg: >
+          Servicio {{ item.item }} -
+          Estado: {{ item.state | default('No encontrado') }}
+      loop: "{{ service_status.results }}"
+
+    #################################################################
+    # Construir lista de servicios caídos
+    #################################################################
+
+    - name: Generar lista de servicios detenidos
+      set_fact:
+        stopped_services: "{{ stopped_services | default([]) + [item.item] }}"
+      when:
+        - item.exists is defined
+        - item.exists
+        - item.state != "running"
+      loop: "{{ service_status.results }}"
+
+    #################################################################
+    # Mostrar alertas
+    #################################################################
+
+    - name: Mostrar servicios detenidos
+      debug:
+        msg: "Servicios detenidos: {{ stopped_services }}"
+      when: stopped_services is defined
+
+    #################################################################
+    # Autoremediación opcional
+    #################################################################
+
+    - name: Reiniciar servicios detenidos
+      win_service:
+        name: "{{ item }}"
+        state: started
+      loop: "{{ stopped_services }}"
+      when:
+        - auto_remediation
+        - stopped_services is defined
+
+    #################################################################
+    # Falla controlada
+    #################################################################
+
+    - name: Generar error si existen servicios críticos detenidos
+      fail:
+        msg: >
+          Existen servicios críticos detenidos:
+          {{ stopped_services }}
+      when:
+        - stopped_services is defined
+        - not auto_remediation
+
+    #################################################################
+    # Estado saludable
+    #################################################################
+
+    - name: Confirmar estado operativo
+      debug:
+        msg: "Todos los servicios críticos están operativos"
+      when: stopped_services is not defined

@@ -1,0 +1,60 @@
+---
+- name: Crear usuario ansible
+  hosts: all
+  become: yes
+
+  vars:
+    ansible_user_name: ansible
+
+    ansible_public_key: |
+      ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7ExampleKeyGeneratedForAutomation admin@controller
+
+  tasks:
+
+    - name: Crear usuario ansible
+      user:
+        name: "{{ ansible_user_name }}"
+        shell: /bin/bash
+        create_home: yes
+        state: present
+
+    - name: Crear directorio .ssh
+      file:
+        path: "/home/{{ ansible_user_name }}/.ssh"
+        state: directory
+        owner: "{{ ansible_user_name }}"
+        group: "{{ ansible_user_name }}"
+        mode: '0700'
+
+    - name: Configurar authorized_keys
+      copy:
+        dest: "/home/{{ ansible_user_name }}/.ssh/authorized_keys"
+        content: "{{ ansible_public_key }}"
+        owner: "{{ ansible_user_name }}"
+        group: "{{ ansible_user_name }}"
+        mode: '0600'
+
+    - name: Configurar privilegios sudo RedHat
+      copy:
+        dest: /etc/sudoers.d/ansible
+        content: "ansible ALL=(ALL) NOPASSWD: ALL"
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      when: ansible_os_family == "RedHat"
+
+    - name: Configurar privilegios sudo Debian
+      copy:
+        dest: /etc/sudoers.d/ansible
+        content: "ansible ALL=(ALL) NOPASSWD: ALL"
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      when: ansible_os_family == "Debian"
+
+    - name: Validar existencia del usuario
+      command: id ansible
+      register: validate_user
+      changed_when: false
+
+    - name: Mostrar resultado
+      debug:
+        msg: "{{ validate_user.stdout }}"

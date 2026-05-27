@@ -1,0 +1,86 @@
+---
+- name: Actualizar sistema operativo Windows
+  hosts: windows
+  gather_facts: yes
+
+  vars:
+
+    reboot_timeout_seconds: 3600
+
+    windows_update_categories:
+      - CriticalUpdates
+      - SecurityUpdates
+      - UpdateRollups
+
+  tasks:
+
+    #################################################################
+    # Buscar actualizaciones disponibles
+    #################################################################
+
+    - name: Buscar updates disponibles
+      win_updates:
+        category_names: "{{ windows_update_categories }}"
+        state: searched
+      register: update_search
+
+    #################################################################
+    # Mostrar updates encontrados
+    #################################################################
+
+    - name: Mostrar cantidad de actualizaciones
+      debug:
+        msg: >
+          Actualizaciones encontradas:
+          {{ update_search.found_update_count }}
+
+    #################################################################
+    # Instalar actualizaciones
+    #################################################################
+
+    - name: Instalar actualizaciones Windows
+      win_updates:
+        category_names: "{{ windows_update_categories }}"
+        state: installed
+        reboot: false
+      register: update_install
+
+    #################################################################
+    # Mostrar resumen instalación
+    #################################################################
+
+    - name: Mostrar updates instalados
+      debug:
+        var: update_install.installed_update_count
+
+    #################################################################
+    # Reinicio controlado
+    #################################################################
+
+    - name: Reiniciar servidor si es requerido
+      win_reboot:
+        reboot_timeout: "{{ reboot_timeout_seconds }}"
+        msg: "Reinicio automático posterior a Windows Update"
+      when: update_install.reboot_required
+
+    #################################################################
+    # Validación posterior
+    #################################################################
+
+    - name: Validar estado post-update
+      win_shell: |
+        Get-ComputerInfo |
+        Select-Object WindowsProductName, WindowsVersion
+      register: windows_info
+
+    #################################################################
+    # Mostrar información final
+    #################################################################
+
+    - name: Mostrar información sistema
+      debug:
+        var: windows_info.stdout_lines
+
+    - name: Confirmar actualización finalizada
+      debug:
+        msg: "Proceso de actualización Windows finalizado correctamente"

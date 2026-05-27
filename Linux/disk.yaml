@@ -1,0 +1,42 @@
+---
+- name: Validar espacio en disco en servidores Linux
+  hosts: all
+  become: yes
+
+  vars:
+    disk_threshold: 80
+
+  tasks:
+
+    - name: Obtener uso de disco
+      shell: df -hP
+      register: disk_usage
+
+    - name: Mostrar salida de df
+      debug:
+        var: disk_usage.stdout_lines
+
+    - name: Validar particiones sobre el umbral
+      shell: |
+        df -hP | awk 'NR>1 {
+          gsub("%","",$5);
+          if ($5 > {{ disk_threshold }})
+          print $6 " usa " $5 "%";
+        }'
+      register: disk_alerts
+      changed_when: false
+
+    - name: Mostrar alertas de espacio
+      debug:
+        msg: "{{ disk_alerts.stdout_lines }}"
+      when: disk_alerts.stdout != ""
+
+    - name: Falla si alguna partición supera el umbral
+      fail:
+        msg: "Existen particiones con uso superior al {{ disk_threshold }}%"
+      when: disk_alerts.stdout != ""
+
+    - name: Confirmar estado saludable
+      debug:
+        msg: "Todas las particiones están por debajo del {{ disk_threshold }}%"
+      when: disk_alerts.stdout == ""

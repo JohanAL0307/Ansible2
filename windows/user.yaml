@@ -1,0 +1,56 @@
+---
+- name: Crear usuario ansible en Windows
+  hosts: windows
+  gather_facts: yes
+
+  vars:
+
+    ansible_local_user: ansible
+
+    ansible_local_password: "StrongPassword123!"
+
+    add_to_admin_group: true
+
+  tasks:
+
+    #################################################################
+    # Crear usuario local
+    #################################################################
+
+    - name: Crear usuario ansible
+      win_user:
+        name: "{{ ansible_local_user }}"
+        password: "{{ ansible_local_password }}"
+        state: present
+        password_never_expires: true
+        user_cannot_change_password: false
+        account_disabled: false
+
+    #################################################################
+    # Agregar a administradores
+    #################################################################
+
+    - name: Agregar usuario al grupo Administrators
+      win_group_membership:
+        name: Administrators
+        members:
+          - "{{ ansible_local_user }}"
+        state: present
+      when: add_to_admin_group
+
+    #################################################################
+    # Validar existencia del usuario
+    #################################################################
+
+    - name: Validar usuario creado
+      win_shell: |
+        Get-LocalUser -Name "{{ ansible_local_user }}"
+      register: user_validation
+
+    #################################################################
+    # Mostrar resultado
+    #################################################################
+
+    - name: Mostrar información usuario
+      debug:
+        var: user_validation.stdout_lines

@@ -1,0 +1,50 @@
+---
+- name: Verificar servicios críticos
+  hosts: all
+  become: yes
+
+  vars:
+    critical_services:
+      - sshd
+      - nginx
+      - docker
+      - chronyd
+
+  tasks:
+
+    - name: Obtener estado de servicios
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ critical_services }}"
+      ignore_errors: yes
+
+    - name: Mostrar estado de servicios
+      debug:
+        msg: >
+          Servicio {{ item.item }}:
+          Estado={{ item.status.ActiveState | default('no instalado') }}
+      loop: "{{ service_status.results }}"
+
+    - name: Construir lista de servicios caídos
+      set_fact:
+        failed_services: "{{ failed_services | default([]) + [item.item] }}"
+      when:
+        - item.status is defined
+        - item.status.ActiveState != "active"
+      loop: "{{ service_status.results }}"
+
+    - name: Mostrar servicios críticos caídos
+      debug:
+        msg: "Servicios caídos: {{ failed_services }}"
+      when: failed_services is defined
+
+    - name: Falla si existen servicios críticos detenidos
+      fail:
+        msg: "Existen servicios críticos detenidos: {{ failed_services }}"
+      when: failed_services is defined
+
+    - name: Confirmar operación normal
+      debug:
+        msg: "Todos los servicios críticos están activos"
+      when: failed_services is not defined

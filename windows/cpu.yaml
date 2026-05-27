@@ -1,0 +1,50 @@
+---
+- name: Verificar uso de CPU en Windows
+  hosts: windows
+  gather_facts: yes
+
+  vars:
+    cpu_threshold: 80
+
+  tasks:
+
+    #################################################################
+    # Obtener uso de CPU
+    #################################################################
+
+    - name: Obtener porcentaje de uso CPU
+      win_shell: |
+        $cpu = Get-Counter '\Processor(_Total)\% Processor Time'
+        [math]::Round($cpu.CounterSamples.CookedValue,2)
+      register: cpu_usage
+
+    #################################################################
+    # Mostrar resultado
+    #################################################################
+
+    - name: Mostrar uso actual CPU
+      debug:
+        msg: "Uso actual CPU: {{ cpu_usage.stdout }}%"
+
+    #################################################################
+    # Validar umbral
+    #################################################################
+
+    - name: Generar alerta si CPU supera umbral
+      fail:
+        msg: >
+          ALERTA: Uso de CPU en {{ inventory_hostname }}
+          supera el umbral permitido.
+          Valor actual: {{ cpu_usage.stdout }}%
+      when: cpu_usage.stdout | float > cpu_threshold
+
+    #################################################################
+    # Estado saludable
+    #################################################################
+
+    - name: Confirmar estado saludable
+      debug:
+        msg: >
+          CPU operando normalmente.
+          Valor actual: {{ cpu_usage.stdout }}%
+      when: cpu_usage.stdout | float <= cpu_threshold
