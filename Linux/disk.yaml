@@ -2,6 +2,7 @@
 - name: Validar espacio en disco en servidores Linux
   hosts: all
   become: yes
+  gather_facts: no
 
   vars:
     disk_threshold: 80
